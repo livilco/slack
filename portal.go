@@ -262,6 +262,9 @@ func (portal *Portal) syncParticipants(source *User, sourceTeam *database.UserTe
 		portal.log.Infofln("Getting participant %s", participant)
 		puppet := portal.bridge.GetPuppetByID(sourceTeam.Key.TeamID, participant)
 
+		// Sync the participants for this channel (only 3 have been fetched for a channel, otherwise it's all the members)
+		puppet.SyncContact(source)
+
 		puppet.UpdateInfo(sourceTeam, true, nil)
 
 		user := portal.bridge.GetUserByID(sourceTeam.Key.TeamID, participant)
@@ -1618,6 +1621,10 @@ func (portal *Portal) HandleSlackNormalMessage(user *User, userTeam *database.Us
 		portal.log.Errorfln("Can't find puppet for %s", e.SlackAuthor)
 		return
 	}
+
+	// Sync the sender's info for this message
+	puppet.SyncContact(user)
+
 	puppet.UpdateInfo(userTeam, true, nil)
 	intent := puppet.IntentFor(portal)
 

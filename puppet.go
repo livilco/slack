@@ -226,19 +226,17 @@ func (puppet *Puppet) updateName(source *User) bool {
 
 	newName := puppet.bridge.Config.Bridge.FormatDisplayname(user)
 
-	if puppet.Name != newName {
-		err := puppet.DefaultIntent().SetDisplayName(newName)
-		if err == nil {
-			puppet.Name = newName
-			puppet.Update()
-		} else {
-			puppet.log.Warnln("failed to set display name:", err)
-		}
-
-		return true
+	//if puppet.Name != newName {
+	puppet.log.Debugln("updating name", puppet.Name, " -> ", newName)
+	err = puppet.DefaultIntent().SetDisplayName(newName)
+	if err == nil {
+		puppet.Name = newName
+		puppet.Update()
+	} else {
+		puppet.log.Warnln("failed to set display name:", err)
 	}
 
-	return false
+	return true
 }
 
 func (puppet *Puppet) updateAvatar(source *User) bool {
