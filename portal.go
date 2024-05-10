@@ -548,6 +548,11 @@ const doublePuppetKey = "fi.mau.double_puppet_source"
 const doublePuppetValue = "mautrix-slack"
 
 func (portal *Portal) sendMatrixMessage(intent *appservice.IntentAPI, eventType event.Type, content *event.MessageEventContent, extraContent map[string]interface{}, timestamp int64) (*mautrix.RespSendEvent, error) {
+	joinErr := portal.bridge.Bot.EnsureJoined(portal.MXID, appservice.EnsureJoinedParams{BotOverride: portal.MainIntent().Client})
+	if joinErr != nil {
+		return nil, fmt.Errorf("failed to ensure bot is joined to room: %w", joinErr)
+	}
+
 	wrappedContent := event.Content{Parsed: content, Raw: extraContent}
 	if timestamp != 0 && intent.IsCustomPuppet {
 		if wrappedContent.Raw == nil {
@@ -1407,6 +1412,9 @@ func (portal *Portal) HandleSlackMessage(user *User, userTeam *database.UserTeam
 	}
 
 	existing := portal.bridge.DB.Message.GetBySlackID(portal.Key, msg.Msg.Timestamp)
+
+	// TODO: Remove logged out users from the portal???
+
 	if existing != nil && msg.Msg.SubType != "message_changed" { // Slack reuses the same message ID on message edits
 		portal.log.Debugln("Dropping duplicate message:", msg.Msg.Timestamp)
 		return

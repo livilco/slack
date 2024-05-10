@@ -134,10 +134,51 @@ func fnLoginToken(ce *WrappedCommandEvent) {
 
 	user := ce.Bridge.GetUserByMXID(ce.User.MXID)
 	info, err := user.TokenLogin(ce.Args[0], cookieToken)
+
 	if err != nil {
+		user.log.Errorfln("Failed to log in with token: %v\n", err)
 		ce.Reply("Failed to log in with token: %v", err)
 	} else {
+		user.log.Debugfln("Successfully logged into %s for team %s\n", info.UserEmail, info.TeamName)
 		ce.Reply("Successfully logged into %s for team %s", info.UserEmail, info.TeamName)
+		teamInfo := ce.Bridge.DB.TeamInfo.GetBySlackTeam(info.TeamID)
+
+		// Find any other users associated with the same slack account
+		// and log them out
+		for _, otherUser := range ce.Bridge.usersByMXID {
+			if otherUser.MXID == ce.User.MXID {
+				continue
+			}
+			if otherUser.IsLoggedInTeam(info.UserEmail, info.TeamName) {
+				otherUser.log.Debugfln("Trying to logout the other session for: %s\n", otherUser.MXID)
+				team := otherUser.bridge.DB.UserTeam.GetBySlackDomain(otherUser.MXID, info.UserEmail, teamInfo.TeamDomain)
+				otherUser.log.Debugfln("Found team %+v", team)
+
+				if team != nil {
+					otherUser.log.Debugfln("Found team %+v", team)
+					otherUser.log.Debugfln("Logging out session on another account (%s) from team %s...\n", otherUser.MXID, info.TeamName)
+					ce.Reply("Logging out session on another account (%s) from team %s", otherUser.MXID, info.TeamName)
+
+					// TODO: ensure user team is disconnected when it is logged out
+					err := ce.User.disconnectTeam(team)
+					if err != nil {
+						ce.Reply("Error disconnecting from Slack: %v", err)
+						continue
+					}
+
+					err = otherUser.LogoutUserTeam(team)
+					if err != nil {
+						otherUser.log.Errorfln("Error logging out: %v\n", err)
+						ce.Reply("Error logging out: %v", err)
+					} else {
+						otherUser.log.Debugfln("Logged out successfully\n")
+						ce.Reply("Other session logged out successfully for %s", otherUser.MXID)
+					}
+				} else {
+					otherUser.log.Warnfln("Failed to find team %s and email %s in database for user %s", info.TeamName, info.UserEmail, otherUser.MXID)
+				}
+			}
+		}
 	}
 }
 
@@ -161,7 +202,14 @@ func fnLogout(ce *WrappedCommandEvent) {
 	domain := strings.TrimSuffix(ce.Args[1], ".slack.com")
 	userTeam := ce.User.bridge.DB.UserTeam.GetBySlackDomain(ce.User.MXID, ce.Args[0], domain)
 
-	err := ce.User.LogoutUserTeam(userTeam)
+	// TODO: ensure user team is disconnected when it is logged out
+	err := ce.User.disconnectTeam(userTeam)
+	if err != nil {
+		ce.Reply("Error disconnecting from Slack: %v", err)
+		return
+	}
+
+	err = ce.User.LogoutUserTeam(userTeam)
 	if err != nil {
 		ce.Reply("Error logging out: %v", err)
 	} else {

@@ -365,11 +365,13 @@ func (user *User) LogoutUserTeam(userTeam *database.UserTeam) error {
 		}
 	}
 
-	if _, err := userTeam.Client.SendAuthSignout(); err != nil {
-		user.log.Errorfln("Failed to send auth.signout request to Slack! %v", err)
-	}
+	if userTeam.Client != nil {
+		if _, err := userTeam.Client.SendAuthSignout(); err != nil {
+			user.log.Errorfln("Failed to send auth.signout request to Slack! %v", err)
+		}
 
-	userTeam.Client = nil
+		userTeam.Client = nil
+	}
 
 	user.BridgeStates[userTeam.Key.TeamID].Send(status.BridgeState{StateEvent: status.StateLoggedOut})
 
@@ -381,7 +383,17 @@ func (user *User) LogoutUserTeam(userTeam *database.UserTeam) error {
 	userTeam.CookieToken = ""
 	userTeam.Upsert()
 
+	// TODO: Remove the userTeam Portal entries here?
+	// TODO: Remove the portal entries here?
+	// TODO: Remove the portal channels here?
+
+	// Remove users from all the team's portals
+	for _, portal := range user.bridge.GetAllPortalsForUserTeam(userTeam.Key) {
+		portal.ensureUserInvited(user)
+	}
+
 	user.Update()
+	user.log.Debugfln("Logged user %s out of team %s", user.MXID, userTeam.Key.TeamID)
 
 	return nil
 }
@@ -395,6 +407,11 @@ func (user *User) leavePortals(userTeam *database.UserTeam) {
 func (user *User) slackMessageHandler(userTeam *database.UserTeam) {
 	user.log.Debugfln("Start receiving Slack events for %s", userTeam.Key)
 	for msg := range userTeam.RTM.IncomingEvents {
+		if userTeam.Client == nil || userTeam.RTM == nil {
+			user.log.Warnfln("Slack RTM for %s disconnected, stopping event handler", userTeam.Key)
+			return
+		}
+
 		switch event := msg.Data.(type) {
 		case *slack.ConnectingEvent:
 			user.log.Debugfln("connecting: attempt %d", event.Attempt)
@@ -455,7 +472,10 @@ func (user *User) slackMessageHandler(userTeam *database.UserTeam) {
 						portal.log.Errorln("Failed to create portal room:", err)
 						continue
 					}
+				} else {
+					portal.ensureUserInvited(user)
 				}
+
 				portal.HandleSlackMessage(user, userTeam, event)
 			}
 		case *slack.ReactionAddedEvent:
@@ -894,6 +914,34 @@ func (user *User) ensureInvited(intent *appservice.IntentAPI, roomID id.RoomID, 
 	}
 
 	return ret
+}
+
+// Leave the room
+func (user *User) leaveRoom(intent *appservice.IntentAPI, roomID id.RoomID) {
+	if intent == nil {
+		intent = user.bridge.Bot
+	}
+	leaveContent := event.Content{
+		Parsed: &event.MemberEventContent{
+			Membership: event.MembershipLeave,
+		},
+		Raw: map[string]interface{}{},
+	}
+
+	customPuppet := user.bridge.GetPuppetByCustomMXID(user.MXID)
+
+	_, err := intent.SendStateEvent(roomID, event.StateMember, user.MXID.String(), &leaveContent)
+
+	if err != nil {
+		user.log.Warnfln("Failed to leave room %s: %v", roomID, err)
+	}
+
+	if customPuppet != nil && customPuppet.CustomIntent() != nil {
+		_, err = customPuppet.CustomIntent().LeaveRoom(roomID)
+		if err != nil {
+			user.log.Warnfln("Failed to leave room %s: %v", roomID, err)
+		}
+	}
 }
 
 func (user *User) updateChatMute(portal *Portal, muted bool) {

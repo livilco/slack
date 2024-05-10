@@ -193,5 +193,7 @@ func (ut *UserTeam) Upsert() {
 
 	if err != nil {
 		ut.log.Warnfln("Failed to upsert %s/%s/%s: %v", ut.Key.MXID, ut.Key.SlackID, ut.Key.TeamID, err)
+	} else {
+		ut.log.Debugfln("Upserted %s/%s/%s token = %s, cookieToken = %s", ut.Key.MXID, ut.Key.SlackID, ut.Key.TeamID, token, cookieToken)
 	}
 }
