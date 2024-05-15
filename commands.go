@@ -38,6 +38,7 @@ func (br *SlackBridge) RegisterCommands() {
 		cmdLoginPassword,
 		cmdLoginToken,
 		cmdLogout,
+		cmdLogoutAll,
 		cmdSyncTeams,
 		cmdDeletePortal,
 	)
@@ -214,6 +215,33 @@ func fnLogout(ce *WrappedCommandEvent) {
 		ce.Reply("Error logging out: %v", err)
 	} else {
 		ce.Reply("Logged out successfully.")
+	}
+}
+
+var cmdLogoutAll = &commands.FullHandler{
+	Func: wrapCommand(fnLogoutAll),
+	Name: "logout-all",
+	Help: commands.HelpMeta{
+		Section:     commands.HelpSectionAuth,
+		Description: "Unlink the bridge from all your Slack accounts.",
+	},
+}
+
+func fnLogoutAll(ce *WrappedCommandEvent) {
+	for _, team := range ce.User.Teams {
+		err := ce.User.disconnectTeam(team)
+		if err != nil {
+			ce.Reply("Error disconnecting from Slack: %v", err)
+			return
+		}
+
+		err = ce.User.LogoutUserTeam(team)
+		if err != nil {
+			ce.Reply("Error logging out: %v", err)
+			return
+		} else {
+			ce.Reply("Logged out successfully.")
+		}
 	}
 }
 
