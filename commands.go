@@ -74,7 +74,7 @@ func fnPing(ce *WrappedCommandEvent) {
 	text.WriteString("You are signed in to the following Slack teams:\n")
 	for _, team := range ce.User.Teams {
 		teamInfo := ce.Bridge.DB.TeamInfo.GetBySlackTeam(team.Key.TeamID)
-		text.WriteString(fmt.Sprintf("%s - %s - %s.slack.com", teamInfo.TeamID, teamInfo.TeamName, teamInfo.TeamDomain))
+		text.WriteString(fmt.Sprintf("UserID: %s - TeamID: %s - TeamName: %s - TeamDomain: %s.slack.com", team.Key.SlackID, teamInfo.TeamID, teamInfo.TeamName, teamInfo.TeamDomain))
 		if team.RTM == nil {
 			text.WriteString(" (Error: not connected to Slack)")
 		}
