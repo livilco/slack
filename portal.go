@@ -1668,7 +1668,17 @@ func (portal *Portal) HandleSlackNormalMessage(user *User, userTeam *database.Us
 			portal.addThreadMetadata(e.Event, msg.ThreadTimestamp)
 		}
 
-		resp, err := portal.sendMatrixMessage(intent, event.EventMessage, e.Event, nil, ts.UnixMilli())
+		extraContent := make(map[string]interface{})
+
+		// Get the matrix user ID for the sender if it exists in the DB
+		portal.log.Debugfln("Trying to load the user_team for %s : %s", msg.User, msg.Team)
+		userTeam := portal.bridge.DB.UserTeam.GetBySlackUserIDAndTeamID(msg.User, msg.Team)
+		if userTeam != nil {
+			portal.log.Debugfln("The sender MX ID is %s", userTeam.GetMXID())
+			extraContent["mx_sender_id"] = userTeam.GetMXID()
+		}
+
+		resp, err := portal.sendMatrixMessage(intent, event.EventMessage, e.Event, extraContent, ts.UnixMilli())
 		if err != nil {
 			portal.log.Warnfln("Failed to send message %s to matrix: %v", msg.Timestamp, err)
 			return

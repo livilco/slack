@@ -89,6 +89,17 @@ func (utq *UserTeamQuery) GetAllBySlackTeamID(teamID string) []*UserTeam {
 	return tokens
 }
 
+func (utq *UserTeamQuery) GetBySlackUserIDAndTeamID(userID string, teamID string) *UserTeam {
+	query := userTeamSelect + "WHERE ut.slack_id = $1 AND ut.team_id=$2"
+
+	row := utq.db.QueryRow(query, userID, teamID)
+	if row == nil {
+		return nil
+	}
+
+	return utq.New().Scan(row)
+}
+
 func (utq *UserTeamQuery) GetFirstUserTeamForPortal(portal *PortalKey) *UserTeam {
 	query := userTeamSelect + `
 		JOIN user_team_portal utp ON utp.matrix_user_id = ut.mxid
